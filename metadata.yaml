@@ -1,0 +1,20 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+name: postgresql-data-k8s
+display-name: PostgreSQL Data Injector Charm
+
+summary: |
+  TEMPLATE-TODO: fill out the charm's summary
+
+description: |
+  TEMPLATE-TODO: fill out the charm's description
+
+containers:
+  noop:
+    resource: noop-image
+
+resources:
+  noop-image:
+    type: oci-image
+    description: OCI image for the no-nop container (google/pause).
