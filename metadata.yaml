@@ -29,11 +29,6 @@ containers:
     resource: noop-image
 
 resources:
-  sql-dump-file:
-    type: file
-    filename: dump.tar
-    description: The SQL dump to inject into the related PostgreSQL database.
-
   noop-image:
     type: oci-image
     description: OCI image for the no-nop container (google/pause).

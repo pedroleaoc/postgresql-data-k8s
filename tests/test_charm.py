@@ -51,7 +51,9 @@ class TestCharm(unittest.TestCase):
         # Join a PostgreSQL charm. A database relation joined is then triggered. The database
         # name should be set in the event.database. Without it, we can't continue on the
         # master changed event.
-        self.harness.update_config({"db-name": "foo.lish"})
+        dummy_url = "ima/dummy.tar.gz"
+        self.harness.update_config({"db-name": "foo.lish", "sql-dump-url": dummy_url})
+
         rel_id = self._add_relation("db-admin", "postgresql-charm", {})
 
         # Check that the event.database is set.
@@ -65,8 +67,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.model.unit.status, expected_status)
 
         # Setup mocks and update the relation data with a PostgreSQL connection string.
-        mock_fetch = self._patch(self.harness.model.resources, "fetch")
+        mock_get = self._patch(charm.requests, "get")
         mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
+        mock_gzip_open = self._patch(charm.gzip, "open", mock.mock_open(read_data=""), create=True)
         connection_url = "host=foo.lish port=5432 dbname=foo.lish user=someuser password=somepass"
         rel_data = {
             "database": self.harness.charm.config["db-name"],
@@ -74,13 +77,20 @@ class TestCharm(unittest.TestCase):
         }
         self.harness.update_relation_data(rel_id, "postgresql-charm", rel_data)
 
-        # Check that pg_restore is called.
-        mock_fetch.assert_called_once_with("sql-dump-file")
+        mock_open.assert_has_calls(
+            [
+                mock.call("/tmp/dummy.tar.gz", "wb"),
+                mock.call("/tmp/dummy.tar", "wb"),
+                mock.call("/tmp/dummy.tar", "r"),
+            ],
+            any_order=True,
+        )
+        mock_gzip_open.assert_called_once_with("/tmp/dummy.tar.gz", "rb")
 
+        # Check that pg_restore is called.
         conn = pgconnstr.ConnectionString(connection_url)
         user = self.harness.charm.config["db-user"]
         cmd = ["pg_restore", "--dbname", conn.uri, "--clean", "--no-owner", "--role", user]
-
         mock_f = mock_open.return_value.__enter__.return_value
         mock_popen.assert_called_with(cmd, stdin=mock_f, stdout=subprocess.PIPE)
         self.assertNotEqual(self.harness.charm._stored.last_update, 0)
@@ -93,20 +103,37 @@ class TestCharm(unittest.TestCase):
         self.harness.begin_with_initial_hooks()
         self.harness.update_config({"db-name": "foo.lish"})
 
+        # no SQL dump URL configured, the charm should be Blocked.
+        expected_status = model.BlockedStatus("No sql-dump-url (dump.tar.gz) configured.")
+        self.assertEqual(self.harness.model.unit.status, expected_status)
+
+        # Configure sql-dump-url, it shouldn't block on it anymore.
+        self.harness.update_config({"sql-dump-url": "ima/dummy.tar"})
         expected_status = model.BlockedStatus("Waiting for database relation.")
         self.assertEqual(self.harness.model.unit.status, expected_status)
 
         # Setup mocks and join a PostgreSQL charm with the relation data containing a connection
-        # string.
+        # string. The charm should be in Blocked status if requests.get failed.
         self.harness.set_leader(True)
-        self._patch(self.harness.model.resources, "fetch")
-        mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
+        mock_get = self._patch(charm.requests, "get")
+        mock_get.side_effect = Exception("Expected exception")
         connection_url = "host=foo.lish port=5432 dbname=foo.lish user=someuser password=somepass"
         rel_data = {
             "database": self.harness.charm.config["db-name"],
             "master": connection_url,
         }
         self._add_relation("db-admin", "postgresql-charm", rel_data)
+
+        # The charm should be in Blocked status because requests.get failed.
+        expected_status = model.BlockedStatus(
+            "Encountered error while getting SQL dump. Check juju logs for more details."
+        )
+        self.assertEqual(self.harness.model.unit.status, expected_status)
+
+        # requests.get won't fail anymore. Trigger an update.
+        mock_get.side_effect = None
+        mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
+        self.harness.update_config({"sql-dump-url": "dummy.tar"})
 
         conn = pgconnstr.ConnectionString(connection_url)
         user = self.harness.charm.config["db-user"]
