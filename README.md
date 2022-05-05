@@ -9,13 +9,23 @@ This charm can be used to import data into a related PostgreSQL charm, and optio
 To deploy this charm, simply run:
 
 ```bash
-juju deploy ./postgresql-data-k8s_ubuntu-20.04-amd64.charm --resource noop-image=google/pause --resource sql-dump-file=dump.tar
+juju deploy postgresql-data-k8s --channel=edge
 ```
 
 This charm will require the database to update and the user which will own the data contained in the SQL dump (otherwise, Permission Denied errors will occur when another user tries to access that data):
 
 ```bash
 juju config postgresql-data-k8s db-name=somedb db-user=someuser
+```
+
+Next, the charm will require the SQL dump URL which will be injected into the database. The SQL dump should be a tar archive instead of a plaintext dump, in order to avoid any potential errors while restoring the data into the database. The charm also supports ``.tar.gz`` SQL dumps.
+
+For more information about how to generate the tar SQL dump, see [here](https://www.postgresql.org/docs/current/app-pgdump.html)
+
+After obtaining the SQL dump URL, the charm can be configured to use it:
+
+```bash
+juju config postgresql-data-k8s sql-dump-url=the-url-of-the-dump
 ```
 
 This Charm needs to be related to a ``postgresql-k8s`` charm using the ``db-admin`` relation. The following commands will deploy a new ``postgresql-k8s`` charm and relate it to the ``postgresql-data-k8s`` charm:
