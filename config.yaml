@@ -1,0 +1,34 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+#
+# Learn more about config at: https://juju.is/docs/sdk/config
+
+options:
+  refresh-period:
+    type: int
+    default: 0
+    description: |
+      The interval (minutes) after which to perform a database refresh using
+      the given sql-dump-file resource. If the value is 0, the refresh is
+      disabled, and the charm will only do the initial database update on
+      any newly related PostgreSQL charm database.
+
+  sql-dump-url:
+    type: string
+    default: ""
+    description: |
+      The URL for the tar SQL dump to inject into the related PostgreSQL database.
+
+  db-name:
+    type: string
+    default: "postgresql-data-k8s"
+    description: |
+      The postgresql database name to update.
+
+  db-user:
+    type: string
+    default: "postgresql-data-k8s"
+    description: |
+      The user / role which will own the recreated data. This is necessary
+      in order to avoid permission denied errors on the database that that
+      user is consuming.
