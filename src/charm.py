@@ -6,11 +6,10 @@
 
 """Module defining the PostgreSQL Data Injector Charm."""
 
-import gzip
 import logging
 import os
-import shutil
 import subprocess
+import tarfile
 from datetime import datetime
 
 import pgconnstr
@@ -20,6 +19,12 @@ from ops import charm, framework, lib, main, model
 logger = logging.getLogger(__name__)
 
 pgsql = lib.use("pgsql", 1, "postgresql-charmers@lists.launchpad.net")
+
+
+class PostgresqlDataK8sError(Exception):
+    """Custom exception class used to raise errors in the project."""
+
+    pass
 
 
 class PostgresqlDataK8SCharm(charm.CharmBase):
@@ -204,17 +209,34 @@ class PostgresqlDataK8SCharm(charm.CharmBase):
         with open(file_path, "wb") as dump_file:
             dump_file.write(response.content)
 
-        if not filename.endswith(".gz"):
+        if not tarfile.is_tarfile(file_path):
+            raise PostgresqlDataK8sError("Given dump URL is not a .tar or .tar.gz file.")
+
+        if not self._is_gz_archive(file_path):
             return file_path
 
         # If it's a .gz file, we need to extract it, since pg_restore expects a tar file.
         logger.debug("Decompressing .gz file.")
-        new_file_path = file_path.rstrip(".gz")
-        with gzip.open(file_path, "rb") as gz_file:
-            with open(new_file_path, "wb") as ungzed_file:
-                shutil.copyfileobj(gz_file, ungzed_file)
+        targz = tarfile.open(file_path)
+        names = targz.getnames()
+        if not names:
+            targz.close()
+            raise PostgresqlDataK8sError("No file names found in the given dump URL archive.")
 
+        targz.extractall("/tmp/")
+        targz.close()
+
+        new_file_path = os.path.join("/tmp", names[0])
         return new_file_path
+
+    def _is_gz_archive(self, file_path):
+        """Returns whether the given file_path is .gz file or not."""
+        try:
+            tar = tarfile.open(file_path, "r:gz")
+            tar.close()
+            return True
+        except tarfile.ReadError:
+            return False
 
 
 if __name__ == "__main__":
