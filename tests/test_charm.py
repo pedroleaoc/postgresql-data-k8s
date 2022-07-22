@@ -67,7 +67,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.model.unit.status, expected_status)
 
         # Setup mocks and update the relation data with a PostgreSQL connection string.
-        mock_get = self._patch(charm.requests, "get")
+        self._patch(charm.requests, "get")
         mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
         mock_gzip_open = self._patch(charm.gzip, "open", mock.mock_open(read_data=""), create=True)
         connection_url = "host=foo.lish port=5432 dbname=foo.lish user=someuser password=somepass"
