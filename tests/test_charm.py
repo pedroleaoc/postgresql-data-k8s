@@ -4,7 +4,9 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import datetime
+import os
 import subprocess
+import tarfile
 import unittest
 from unittest import mock
 
@@ -51,7 +53,7 @@ class TestCharm(unittest.TestCase):
         # Join a PostgreSQL charm. A database relation joined is then triggered. The database
         # name should be set in the event.database. Without it, we can't continue on the
         # master changed event.
-        dummy_url = "ima/dummy.tar.gz"
+        dummy_url = "ima/dummy.tar"
         self.harness.update_config({"db-name": "foo.lish", "sql-dump-url": dummy_url})
 
         rel_id = self._add_relation("db-admin", "postgresql-charm", {})
@@ -69,7 +71,11 @@ class TestCharm(unittest.TestCase):
         # Setup mocks and update the relation data with a PostgreSQL connection string.
         self._patch(charm.requests, "get")
         mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
-        mock_gzip_open = self._patch(charm.gzip, "open", mock.mock_open(read_data=""), create=True)
+        self._patch(charm.tarfile, "is_tarfile")
+        mock_tarfile_open = self._patch(charm.tarfile, "open")
+
+        # Consider it a .tar file.
+        mock_tarfile_open.side_effect = tarfile.ReadError("Expected error.")
         connection_url = "host=foo.lish port=5432 dbname=foo.lish user=someuser password=somepass"
         rel_data = {
             "database": self.harness.charm.config["db-name"],
@@ -78,14 +84,9 @@ class TestCharm(unittest.TestCase):
         self.harness.update_relation_data(rel_id, "postgresql-charm", rel_data)
 
         mock_open.assert_has_calls(
-            [
-                mock.call("/tmp/dummy.tar.gz", "wb"),
-                mock.call("/tmp/dummy.tar", "wb"),
-                mock.call("/tmp/dummy.tar", "r"),
-            ],
-            any_order=True,
+            [mock.call("/tmp/dummy.tar", "wb"), mock.call("/tmp/dummy.tar", "r")], any_order=True
         )
-        mock_gzip_open.assert_called_once_with("/tmp/dummy.tar.gz", "rb")
+        mock_tarfile_open.assert_called_once()
 
         # Check that pg_restore is called.
         conn = pgconnstr.ConnectionString(connection_url)
@@ -133,6 +134,7 @@ class TestCharm(unittest.TestCase):
         # requests.get won't fail anymore. Trigger an update.
         mock_get.side_effect = None
         mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
+        self._patch(charm.tarfile, "open")
         self.harness.update_config({"sql-dump-url": "dummy.tar"})
 
         conn = pgconnstr.ConnectionString(connection_url)
@@ -162,3 +164,52 @@ class TestCharm(unittest.TestCase):
 
         self.harness.charm.on.update_status.emit()
         mock_popen.assert_called_with(cmd, stdin=mock_f, stdout=subprocess.PIPE)
+
+    @mock.patch("tarfile.open")
+    @mock.patch("tarfile.is_tarfile")
+    @mock.patch("requests.get")
+    def test_fetch_dump_file(self, mock_get, mock_is_tarfile, mock_tarfile_open):
+        self.harness.begin_with_initial_hooks()
+        mock_open = self._patch(charm, "open", mock.mock_open(read_data=""), create=True)
+
+        # Check that an exception is raised if it's not a tar file.
+        dump_url = "https://foo.lish/dump.tar"
+        mock_is_tarfile.return_value = False
+        self.assertRaises(
+            charm.PostgresqlDataK8sError, self.harness.charm._fetch_dump_file, dump_url
+        )
+        mock_get.assert_called_once_with(dump_url)
+        mock_open.assert_called_once_with(os.path.join("/tmp", "dump.tar"), "wb")
+        mock_open.return_value.write.assert_called_once_with(mock_get.return_value.content)
+
+        # Check that it will return the unextracted tar if it's not a gz archive.
+        mock_is_tarfile.return_value = True
+        mock_tarfile_open.side_effect = tarfile.ReadError("Expected error.")
+        mock_tar = mock_tarfile_open.return_value
+        file_path = self.harness.charm._fetch_dump_file(dump_url)
+        self.assertEqual(os.path.join("/tmp", "dump.tar"), file_path)
+        mock_tar.close.assert_not_called()
+
+        # Check that it will raise an exception if it's an empty archive.
+        mock_tarfile_open.side_effect = None
+        mock_tar = mock_tarfile_open.return_value
+        mock_tar.getnames.return_value = []
+        self.assertRaises(
+            charm.PostgresqlDataK8sError, self.harness.charm._fetch_dump_file, dump_url
+        )
+        mock_tar.close.assert_has_calls([mock.call()] * 2)
+
+        # Check that the archive is extracted and that the right path is returned.
+        mock_tar.getnames.return_value = ["dump.sql"]
+        mock_tar.close.reset()
+        file_path = self.harness.charm._fetch_dump_file(dump_url)
+        self.assertEqual(os.path.join("/tmp", mock_tar.getnames.return_value[0]), file_path)
+        mock_tar.close.assert_has_calls([mock.call()] * 2)
+
+    @mock.patch("tarfile.open")
+    def test_is_gz_archive(self, mock_tarfile_open):
+        self.harness.begin_with_initial_hooks()
+        self.assertTrue(self.harness.charm._is_gz_archive(mock.sentinel.file_path))
+
+        mock_tarfile_open.side_effect = tarfile.ReadError("Expected error")
+        self.assertFalse(self.harness.charm._is_gz_archive(mock.sentinel.file_path))
