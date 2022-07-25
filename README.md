@@ -51,6 +51,10 @@ This charm requires an ``db-admin`` relation, typically provided by the ``postgr
 
 This Charm does not use a Workload Container, how an OCI image is still required to deploy the charm. Any noop image can be used; but it is recommended to use a pause image (``google/pause``).
 
+## Charm releases
+
+This repository is configured to automatically build and publish a new Charm revision after a Pull Request merges. For more information, see [here](docs/CharmPublishing.md).
+
 ## Contributing
 
 Please see the [Juju SDK docs](https://juju.is/docs/sdk) for guidelines on enhancements to this charm following best practice guidelines, and `CONTRIBUTING.md` for developer guidance.
