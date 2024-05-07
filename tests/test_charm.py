@@ -98,6 +98,25 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(self.harness.model.unit.status, model.ActiveStatus())
 
     @mock.patch("subprocess.Popen")
+    def test_on_upgrade(self, mock_popen):
+        self.harness.begin_with_initial_hooks()
+
+        cmd_update = ["apt", "update"]
+        cmd_install = ["apt", "install", "-y", "postgresql-client"]
+        mock_calls = [
+            mock.call(cmd_update, stdout=subprocess.PIPE),
+            mock.call(cmd_install, stdout=subprocess.PIPE),
+        ]
+
+        # Assert initial calls from on_install hook.
+        mock_popen.assert_has_calls(mock_calls, any_order=True)
+        mock_popen.reset_mock()
+
+        # Trigger upgrade and make assertions.
+        self.harness.charm.on.upgrade_charm.emit()
+        mock_popen.assert_has_calls(mock_calls, any_order=True)
+
+    @mock.patch("subprocess.Popen")
     def test_config_changed(self, mock_popen):
         """Test for the config updated hook."""
         # We don't have a PostgreSQL charm, so the charm should be in Blocked Status.

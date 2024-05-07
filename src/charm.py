@@ -56,6 +56,7 @@ class PostgresqlDataK8SCharm(charm.CharmBase):
 
         # General hooks:
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.update_status, self._on_update_status)
 
@@ -98,6 +99,20 @@ class PostgresqlDataK8SCharm(charm.CharmBase):
         This will install the postgresql-client dependency, which contains the pg_restore binary
         used by this charm.
         """
+        self._install_client()
+
+    def _on_upgrade(self, _):
+        """Handles the charm upgrade hook.
+
+        This will install the postgresql-client dependency, which contains the pg_restore binary
+        used by this charm.
+
+        If a Pod is respawned, the install and start hooks are not triggered, but this one is.
+        We need this in order to ensure that the dependency exists.
+        """
+        self._install_client()
+
+    def _install_client(self):
         proc = subprocess.Popen(["apt", "update"], stdout=subprocess.PIPE)
         proc.wait()
 
