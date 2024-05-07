@@ -23,12 +23,3 @@ requires:
     interface: pgsql
     limit: 1
     scope: global
-
-containers:
-  noop:
-    resource: noop-image
-
-resources:
-  noop-image:
-    type: oci-image
-    description: OCI image for the no-nop container (google/pause).

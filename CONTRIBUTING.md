@@ -51,7 +51,7 @@ If there are any other issues, ``charmcraft clean`` might help.
 After the charm has been built, you will be able to find it in the local folder. You can then deploy it with the command:
 
 ```bash
-juju deploy ./postgresql-data-k8s_ubuntu-20.04-amd64.charm --resource noop-image=google/pause
+juju deploy ./postgresql-data-k8s_ubuntu-20.04-amd64.charm
 ```
 
 If it was already deployed, you can simply refresh it:
