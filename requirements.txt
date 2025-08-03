@@ -1,3 +1,4 @@
 ops >= 1.2.0
 ops-lib-pgsql
 pgconnstr
+requests
