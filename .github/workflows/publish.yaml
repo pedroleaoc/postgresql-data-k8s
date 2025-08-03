@@ -16,12 +16,12 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check libraries
-        uses: canonical/charming-actions/check-libraries@1.0.2
+        uses: canonical/charming-actions/check-libraries@2.2.0
         with:
           credentials: "${{ secrets.CHARMHUB_TOKEN }}"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Upload charm to charmhub
-        uses: canonical/charming-actions/upload-charm@1.0.2
+        uses: canonical/charming-actions/upload-charm@2.2.0
         with:
           credentials: "${{ secrets.CHARMHUB_TOKEN }}"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
